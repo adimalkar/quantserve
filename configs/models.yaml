@@ -1,0 +1,88 @@
+models:
+  llama3_1b:
+    name: "meta-llama/Llama-3.2-1B"
+    hf_id: "meta-llama/Llama-3.2-1B"
+    family: "decoder_llm"
+    params_billion: 1.23
+    hidden_size: 2048
+    num_layers: 16
+    num_heads: 32
+    num_kv_heads: 8 # 4:1 GQA
+    vocab_size: 128256
+    context_length: 8192
+    supported_precisions: ["fp16", "int4_awq", "int4_gptq", "fp8_e4m3", "int8_smoothquant", "sparse_2_4"]
+
+  llama3_3b:
+    name: "meta-llama/Llama-3.2-3B"
+    hf_id: "meta-llama/Llama-3.2-3B"
+    family: "decoder_llm"
+    params_billion: 3.21
+    hidden_size: 3072
+    num_layers: 28
+    num_heads: 24
+    num_kv_heads: 8 # 3:1 GQA
+    vocab_size: 128256
+    context_length: 8192
+    supported_precisions: ["fp16", "int4_awq", "int4_gptq", "fp8_e4m3", "int8_smoothquant", "sparse_2_4"]
+
+  qwen25_15b:
+    name: "Qwen/Qwen2.5-1.5B"
+    hf_id: "Qwen/Qwen2.5-1.5B"
+    family: "decoder_llm"
+    params_billion: 1.54
+    hidden_size: 1536
+    num_layers: 28
+    num_heads: 12
+    num_kv_heads: 2 # 6:1 GQA
+    vocab_size: 151936
+    context_length: 32768
+    supported_precisions: ["fp16", "int4_awq", "fp8_e4m3", "int8_smoothquant"]
+
+  vit_base_16:
+    name: "google/vit-base-patch16-224"
+    hf_id: "google/vit-base-patch16-224"
+    family: "vision_transformer"
+    params_million: 86.6
+    hidden_size: 768
+    num_layers: 12
+    num_heads: 12
+    patch_size: 16
+    image_size: 224
+    supported_precisions: ["fp16", "sparse_2_4", "int8_ptq"]
+
+hardware_profiles:
+  ada_4050:
+    name: "NVIDIA GeForce RTX 4050 Laptop GPU"
+    arch: "Ada Lovelace"
+    compute_capability: "8.9"
+    memory_gb: 6.0
+    memory_bandwidth_gbs: 192.0
+    fp16_tflops: 36.0
+    fp8_tflops: 72.0
+    int8_tops: 72.0
+    sparse_fp16_tflops: 72.0 # 2:4 Sparse Tensor Cores
+    hourly_rate_usd: 0.0 # Local hardware
+
+  a10g:
+    name: "NVIDIA A10G"
+    arch: "Ampere"
+    compute_capability: "8.6"
+    memory_gb: 24.0
+    memory_bandwidth_gbs: 600.0
+    fp16_tflops: 70.0
+    fp8_tflops: 0.0 # Ampere has no native FP8
+    int8_tops: 140.0
+    sparse_fp16_tflops: 140.0
+    hourly_rate_usd: 0.45
+
+  rtx_4090:
+    name: "NVIDIA GeForce RTX 4090"
+    arch: "Ada Lovelace"
+    compute_capability: "8.9"
+    memory_gb: 24.0
+    memory_bandwidth_gbs: 1008.0
+    fp16_tflops: 165.0
+    fp8_tflops: 330.0
+    int8_tops: 330.0
+    sparse_fp16_tflops: 330.0
+    hourly_rate_usd: 0.55

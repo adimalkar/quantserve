@@ -1,0 +1,28 @@
+workload:
+  type: "open_loop_gamma_burst"
+  gamma_shape: 0.5   # k < 1 produces high variance / heavy-tailed burstiness
+  gamma_scale: 2.0
+  mean_arrival_rates: [1.0, 2.0, 4.0, 8.0, 16.0]
+  duration_seconds: 30
+  warmup_requests: 10
+  seed: 1337
+
+trace_distribution:
+  dataset: "lmsys_burst_calibrated"
+  prompt_length_lognormal:
+    mean: 5.6
+    sigma: 1.2
+    min_tokens: 32
+    max_tokens: 4096
+  decode_length_bimodal:
+    mode1_tokens: 128
+    mode1_weight: 0.70
+    mode2_tokens: 512
+    mode2_weight: 0.30
+    noise_std: 24
+    min_tokens: 1
+    max_tokens: 2048
+
+slo_targets:
+  ttft_p99_ms: 200.0
+  tpot_p99_ms: 40.0

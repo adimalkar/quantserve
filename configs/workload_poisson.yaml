@@ -1,0 +1,27 @@
+workload:
+  type: "open_loop_poisson"
+  arrival_rates_per_second: [0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0]
+  concurrency_sweeps: [1, 2, 4, 8, 16, 32, 64]
+  duration_seconds: 30
+  warmup_requests: 10
+  seed: 42
+
+trace_distribution:
+  dataset: "sharegpt_calibrated"
+  prompt_length_lognormal:
+    mean: 5.4 # ~220 tokens
+    sigma: 1.1
+    min_tokens: 16
+    max_tokens: 2048
+  decode_length_bimodal:
+    mode1_tokens: 64
+    mode1_weight: 0.65
+    mode2_tokens: 384
+    mode2_weight: 0.35
+    noise_std: 16
+    min_tokens: 1
+    max_tokens: 1024
+
+slo_targets:
+  ttft_p99_ms: 150.0   # Time to First Token SLO threshold
+  tpot_p99_ms: 35.0    # Time Per Output Token SLO threshold

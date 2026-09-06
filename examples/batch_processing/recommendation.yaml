@@ -1,0 +1,52 @@
+model_name: Qwen/Qwen2.5-0.5B-Instruct
+hardware:
+  name: NVIDIA GeForce RTX 4050 Laptop GPU
+  arch: Ada Lovelace (sm_89)
+  compute_capability: '8.9'
+  total_vram_gb: 5.66
+  memory_bandwidth_gbs: 192.0
+  fp16_tflops: 36.0
+  fp8_tflops: 72.0
+  int8_tops: 72.0
+  sparse_fp16_tflops: 72.0
+  hourly_rate_usd: 0.0
+  supports_fp8: true
+  supports_sparse_tensor_cores: true
+  supported_precisions:
+  - fp16
+  - int4_awq
+  - int4_gptq
+  - fp8_e4m3
+  - int8_smoothquant
+  - sparse_2_4
+recommended_config:
+  quantization: fp16
+  kv_cache_precision: fp16
+  max_num_seqs: 4
+  max_num_batched_tokens: 512
+  chunked_prefill: true
+  gpu_memory_utilization: 0.9
+predicted_metrics:
+  ttft_p95_ms: 35.249794484081384
+  ttft_p95_ci_90:
+  - 24.674856138856967
+  - 56.65423901897938
+  tpot_p95_ms: 3.305480049331014
+  tpot_p95_ci_90:
+  - 2.3138360345317097
+  - 6.223648746517
+  throughput_tokens_s: 38640.15679923614
+  peak_vram_gb: 4.78
+  slo_probability_pct: 100.0
+quality_retention_pct: 100.0
+search_statistics:
+  total_candidates: 480
+  benchmarks_executed: 16
+  candidates_eliminated: 8
+objective: maximize_throughput
+explanation: At average concurrency C=63, execution operates in the memory-bandwidth
+  constrained regime below the GPU ridge point (187.5 FLOPs/B). FP16 reduces DRAM
+  weight read traffic by up to 73.4% without inducing compute saturation. Paged KV
+  cache with FP16 ensures sufficient context headroom within 4.78 GB VRAM.
+vllm_command: vllm serve Qwen/Qwen2.5-0.5B-Instruct --kv-cache-dtype fp16 --max-num-seqs
+  4 --max-num-batched-tokens 512 --gpu-memory-utilization 0.9 --enable-chunked-prefill

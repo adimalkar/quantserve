@@ -1,0 +1,53 @@
+model_name: Qwen/Qwen2.5-0.5B-Instruct
+hardware:
+  name: NVIDIA GeForce RTX 4050 Laptop GPU
+  arch: Ada Lovelace (sm_89)
+  compute_capability: '8.9'
+  total_vram_gb: 5.66
+  memory_bandwidth_gbs: 192.0
+  fp16_tflops: 36.0
+  fp8_tflops: 72.0
+  int8_tops: 72.0
+  sparse_fp16_tflops: 72.0
+  hourly_rate_usd: 0.0
+  supports_fp8: true
+  supports_sparse_tensor_cores: true
+  supported_precisions:
+  - fp16
+  - int4_awq
+  - int4_gptq
+  - fp8_e4m3
+  - int8_smoothquant
+  - sparse_2_4
+recommended_config:
+  quantization: int4_awq
+  kv_cache_precision: fp16
+  max_num_seqs: 32
+  max_num_batched_tokens: 2048
+  chunked_prefill: true
+  gpu_memory_utilization: 0.9
+predicted_metrics:
+  ttft_p95_ms: 20.766224014741866
+  ttft_p95_ci_90:
+  - 14.536356810319305
+  - 38.33236586433881
+  tpot_p95_ms: 2.052668311963465
+  tpot_p95_ci_90:
+  - 1.4368678183744255
+  - 5.02886074219024
+  throughput_tokens_s: 4249.383919986006
+  peak_vram_gb: 1.1
+  slo_probability_pct: 100.0
+quality_retention_pct: 98.7
+search_statistics:
+  total_candidates: 480
+  benchmarks_executed: 16
+  candidates_eliminated: 8
+objective: minimize_latency
+explanation: At average concurrency C=11, execution operates in the memory-bandwidth
+  constrained regime below the GPU ridge point (187.5 FLOPs/B). INT4_AWQ reduces DRAM
+  weight read traffic by up to 73.4% without inducing compute saturation. Paged KV
+  cache with FP16 ensures sufficient context headroom within 1.10 GB VRAM.
+vllm_command: vllm serve Qwen/Qwen2.5-0.5B-Instruct --quantization awq --kv-cache-dtype
+  fp16 --max-num-seqs 32 --max-num-batched-tokens 2048 --gpu-memory-utilization 0.9
+  --enable-chunked-prefill

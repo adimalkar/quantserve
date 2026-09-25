@@ -48,5 +48,6 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade build
       - run: python -m build --sdist --wheel
+      - run: python -c 'from pathlib import Path; from zipfile import ZipFile; wheel = next(Path("dist").glob("*.whl")); names = set(ZipFile(wheel).namelist()); assert {"quantserve/cli/main.py", "src/bench/runner.py"} <= names'
       - run: python -m pip install --no-deps dist/*.whl
-      - run: cd "$RUNNER_TEMP" && python -c 'import quantserve, src.bench; print("Wheel imports verified")'
+      - run: cd "$RUNNER_TEMP" && python -c 'import quantserve, src; print("Wheel imports verified")'

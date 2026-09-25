@@ -18,6 +18,8 @@ make test PYTHON=python
 The default test suite runs on CPU. GPU and Triton checks run when compatible
 hardware and software are available. CI tests Python 3.10 and 3.12 and builds
 the source and wheel distributions.
+Vercel preview builds are skipped because this repository has no web app or
+Python web entrypoint; GitHub Actions provides the package checks.
 
 ## Changes and evidence
 

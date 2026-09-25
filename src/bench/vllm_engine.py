@@ -2,7 +2,6 @@
 
 import json
 import os
-import secrets
 import time
 from urllib.parse import urlparse
 
@@ -35,7 +34,7 @@ class VLLMServingEngine(ServingEngine):
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
         self.session = None
-        self.run_nonce = secrets.token_hex(4)
+        self.server_version = None
         self.request_counter = 0
 
     async def initialize(self) -> None:
@@ -55,6 +54,12 @@ class VLLMServingEngine(ServingEngine):
                     f"Model {self.model_name!r} is not served at {self.base_url}; "
                     f"available models: {sorted(model_ids)}"
                 )
+            async with self.session.get(f"{self.base_url}/version") as response:
+                response.raise_for_status()
+                version = (await response.json()).get("version")
+            if not isinstance(version, str) or not version:
+                raise ValueError("vLLM did not report a server version")
+            self.server_version = version
         except aiohttp.ClientError as exc:
             await self.close()
             raise RuntimeError(
@@ -77,7 +82,9 @@ class VLLMServingEngine(ServingEngine):
 
         # The actual prompt token count comes from the server's usage object.
         self.request_counter += 1
-        prompt = f"QuantServe {self.run_nonce} request {self.request_counter:08d}. " + ("data " * spec.prompt_len)
+        # Keep prompts identical across repeated configuration runs. The
+        # counter also makes each request distinct within a sweep.
+        prompt = f"QuantServe request {self.request_counter:08d}. " + ("data " * spec.prompt_len)
         request = {
             "model": self.model_name,
             "prompt": prompt,

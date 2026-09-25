@@ -23,6 +23,9 @@ async def completion_server():
     async def models(request):
         return web.json_response({"data": [{"id": "test-model"}]})
 
+    async def version(request):
+        return web.json_response({"version": "test-vllm-1"})
+
     async def completions(request):
         calls.append(await request.json())
         response = web.StreamResponse(headers={"Content-Type": "text/event-stream"})
@@ -39,6 +42,7 @@ async def completion_server():
 
     app = web.Application()
     app.router.add_get("/v1/models", models)
+    app.router.add_get("/version", version)
     app.router.add_post("/v1/completions", completions)
     runner = web.AppRunner(app)
     await runner.setup()
@@ -62,10 +66,24 @@ async def test_vllm_stream_uses_server_token_counts(completion_server):
         await engine.close()
     assert record.prompt_len == 17
     assert record.output_len == 3
+    assert engine.server_version == "test-vllm-1"
     assert record.ttft_ms >= 0
     assert record.tpot_ms > 0
     assert calls[0]["stream_options"] == {"include_usage": True}
     assert calls[0]["model"] == "test-model"
+
+
+@pytest.mark.asyncio
+async def test_same_workload_produces_same_prompts_across_runs(completion_server):
+    url, calls, _ = completion_server
+    for _ in range(2):
+        engine = VLLMServingEngine("test-model", url)
+        await engine.initialize()
+        try:
+            await engine.process_request(RequestSpec("same", 7, 3), 0.0)
+        finally:
+            await engine.close()
+    assert calls[0]["prompt"] == calls[1]["prompt"]
 
 
 @pytest.mark.asyncio
@@ -95,7 +113,7 @@ async def test_sweep_records_measured_provenance_and_fails_on_bad_stream(complet
     url, _, controls = completion_server
     config = tmp_path / "workload.yaml"
     config.write_text(yaml.safe_dump({
-        "workload": {"arrival_rates_per_second": [50.0], "duration_seconds": 0.2, "warmup_requests": 0},
+        "workload": {"arrival_rates_per_second": [50.0], "duration_seconds": 0.2, "warmup_requests": 0, "seed": 7},
     }))
     output_dir = tmp_path / "results"
     results = await run_benchmark_sweep(
@@ -103,6 +121,10 @@ async def test_sweep_records_measured_provenance_and_fails_on_bad_stream(complet
     )
     assert results[0]["measurement_source"] == "measured_e2e"
     assert results[0]["measurement_status"] == "complete"
+    assert results[0]["server_version"] == "test-vllm-1"
+    assert results[0]["requested_window_s"] == 0.2
+    assert results[0]["workload_seed"] == 7
+    assert len(results[0]["workload_config_sha256"]) == 64
     assert results[0]["total_prompt_tokens"] == 17 * results[0]["completed_requests"]
     output_file = output_dir / "sweep_test-model_ada_4050_vllm.json"
     assert json.loads(output_file.read_text()) == results
@@ -140,3 +162,5 @@ async def test_warmup_excluded_from_summary():
     assert engine.ids[:2] == ["warmup_0000", "warmup_0001"]
     assert result.total_requests == len(engine.ids) - 2
     assert result.completed_requests == result.total_requests
+    assert result.duration_s >= 0.2 - 1e-6
+    assert result.throughput_tokens_per_s <= (result.total_prompt_tokens + result.total_output_tokens) / 0.2 + 1e-3

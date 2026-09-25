@@ -1,6 +1,7 @@
 """Benchmark runner for measured serving and explicit simulation sweeps."""
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -56,7 +57,10 @@ async def run_single_benchmark(
 
     # Await all inflight requests to complete
     completed_records = await asyncio.gather(*active_tasks, return_exceptions=True)
-    end_bench_time = time.perf_counter()
+    # Include the idle tail of the configured arrival window. A low-rate
+    # Poisson schedule often ends before duration_s; shortening the denominator
+    # would overstate throughput and SLO goodput.
+    end_bench_time = max(time.perf_counter(), start_bench_time + duration_s)
 
     for spec, rec in zip(request_specs, completed_records):
         if isinstance(rec, Exception):
@@ -96,8 +100,10 @@ async def run_benchmark_sweep(
         raise ValueError("backend must be 'vllm' or 'mock'")
     if backend == "vllm" and precisions:
         raise ValueError("A vLLM server has one configured precision; run each server configuration separately")
-    with open(config_path, "r") as f:
-        cfg = yaml.safe_load(f)
+    with open(config_path, "rb") as f:
+        config_bytes = f.read()
+    cfg = yaml.safe_load(config_bytes)
+    config_sha256 = hashlib.sha256(config_bytes).hexdigest()
     if not isinstance(cfg, dict):
         raise ValueError("Benchmark config must be a YAML mapping")
 
@@ -108,6 +114,7 @@ async def run_benchmark_sweep(
     arrival_rates = workload_cfg.get("arrival_rates_per_second", [1.0, 2.0, 4.0, 8.0, 16.0])
     duration_s = float(workload_cfg.get("duration_seconds", 5))  # Fast run default
     warmup_count = int(workload_cfg.get("warmup_requests", 3))
+    workload_seed = int(workload_cfg.get("seed", 42))
     if not arrival_rates or any(float(rate) <= 0 for rate in arrival_rates):
         raise ValueError("arrival_rates_per_second must contain positive rates")
     if duration_s <= 0 or warmup_count < 0:
@@ -151,7 +158,7 @@ async def run_benchmark_sweep(
 
         try:
             await engine.initialize()
-            workload_gen = WorkloadGenerator(workload_cfg, trace_cfg, seed=42)
+            workload_gen = WorkloadGenerator(workload_cfg, trace_cfg, seed=workload_seed)
 
             for rate in arrival_rates:
                 res = await run_single_benchmark(
@@ -172,6 +179,11 @@ async def run_benchmark_sweep(
                     "measurement_source": "measured_e2e" if backend == "vllm" else "synthetic_simulation",
                     "measurement_status": "complete" if res.failed_requests == 0 else "partial_failed_requests",
                     "backend": backend,
+                    "server_version": engine.server_version if backend == "vllm" else None,
+                    "workload_config_sha256": config_sha256,
+                    "requested_window_s": duration_s,
+                    "warmup_requests": warmup_count,
+                    "workload_seed": workload_seed,
                     "workload_source": "synthetic_request_lengths",
                     "hardware_profile_source": "preset_cost_estimate_only",
                     "tpot_method": "mean_from_stream_chunks_and_server_token_count" if backend == "vllm" else "simulated_token_timestamps",

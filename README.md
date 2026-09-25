@@ -155,26 +155,17 @@ READY-TO-RUN DEPLOYMENT COMMAND
 ```
 
 ### 4. CI/CD Deployment Regression Gate (`quantserve gate`)
-Guards production environments against latency regressions, VRAM out-of-memory errors, and quality degradations before deploying new model versions or serving runtime flags:
+Compares complete measured baseline and candidate runs for latency, throughput,
+peak VRAM, and quality regressions:
 
 ```bash
-$ quantserve gate --baseline production.yaml --candidate candidate.yaml
+quantserve gate --baseline production.yaml --candidate candidate.yaml
 ```
 
-```text
-==================================================
-           QuantServe Deployment Gate
-==================================================
-METRIC                  BASELINE     CANDIDATE    DELTA     STATUS
-P95 TTFT (ms)             540.0        480.0     -11.1%      PASS
-P95 TPOT (ms)              38.0         32.5     -14.5%      PASS
-Throughput (tok/s)       3200.0       3950.0     +23.4%      PASS
-Peak VRAM (GB)             5.40         4.85     -10.2%      PASS
-Quality Retention         99.2%        98.6%     -0.6pp      PASS
---------------------------------------------------
-DEPLOYMENT GATE RESULT: PASS (All constraints satisfied)
-==================================================
-```
+Both inputs must declare `measurement_source: measured_e2e` and
+`measurement_status: complete`, and include all five metrics. Predicted
+recommendation metrics cannot pass this gate. See the
+[input format and exit codes](docs/gate-input.md).
 
 ### 5. Multi-Format Deployment Generator (`quantserve export`)
 Generates deployment files for your production stack:

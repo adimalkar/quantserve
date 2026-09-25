@@ -1,5 +1,6 @@
-"""CI/CD deployment regression gate validating candidate configs against production baselines."""
+"""Fail-closed regression gate for complete measured deployment metrics."""
 from dataclasses import dataclass
+from math import isfinite
 from typing import Dict, Any, List
 
 
@@ -19,15 +20,13 @@ class GateResult:
             "\n" + "=" * 54,
             "           QuantServe Deployment Gate",
             "=" * 54,
-            f"Performance:",
-            f"  P95 TTFT:       {self.ttft_delta_pct:+.1f}% {'✓' if self.ttft_delta_pct <= 0 else '⚠️'}",
-            f"  P95 TPOT:       {self.tpot_delta_pct:+.1f}% {'✓' if self.tpot_delta_pct <= 0 else '⚠️'}",
-            f"  Throughput:     {self.throughput_delta_pct:+.1f}% {'✓' if self.throughput_delta_pct >= 0 else '⚠️'}",
-            f"Memory:",
-            f"  Peak VRAM:      {self.vram_delta_gb:+.2f} GB {'✓' if self.vram_delta_gb <= 0 else '⚠️'}",
-            f"Quality:",
-            f"  Quality Drop:   {self.quality_delta_pct:+.1f}% {'✓' if self.quality_delta_pct >= -2.0 else '✗'}",
+            f"  P95 TTFT change:     {self.ttft_delta_pct:+.1f}%",
+            f"  P95 TPOT change:     {self.tpot_delta_pct:+.1f}%",
+            f"  Throughput change:   {self.throughput_delta_pct:+.1f}%",
+            f"  Peak VRAM change:    {self.vram_delta_gb:+.2f} GB",
+            f"  Quality change:      {self.quality_delta_pct:+.1f} pp",
             "-" * 54,
+            *self.details,
             status_line,
             "=" * 54 + "\n",
         ]
@@ -35,7 +34,50 @@ class GateResult:
 
 
 class DeploymentGate:
-    """Evaluates candidate serving configurations against production baselines."""
+    """Compares complete measured runs; missing or synthetic data cannot pass."""
+
+    @staticmethod
+    def _read_metrics(data: Dict[str, Any], label: str) -> Dict[str, float]:
+        if not isinstance(data, dict):
+            raise ValueError(f"{label} must be a YAML mapping")
+        if data.get("measurement_source") != "measured_e2e":
+            raise ValueError(f"{label} must have measurement_source: measured_e2e")
+        if data.get("measurement_status") != "complete":
+            raise ValueError(f"{label} must have measurement_status: complete")
+
+        aliases = {
+            "ttft_p95_ms": ("ttft_p95_ms",),
+            "tpot_p95_ms": ("tpot_p95_ms",),
+            "throughput_tokens_per_s": ("throughput_tokens_per_s", "throughput_tokens_s"),
+            "peak_vram_gb": ("peak_vram_gb",),
+            "quality_pct": ("quality_retention_pct", "quality_pct"),
+        }
+        values: Dict[str, float] = {}
+        for key, names in aliases.items():
+            present = [name for name in names if name in data]
+            if not present:
+                raise ValueError(f"{label} is missing {key}")
+            if any(isinstance(data[name], bool) for name in present):
+                raise ValueError(f"{label} {key} must be numeric")
+            try:
+                numbers = [float(data[name]) for name in present]
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{label} {key} must be numeric") from exc
+            if any(not isfinite(number) for number in numbers):
+                raise ValueError(f"{label} {key} must be finite")
+            if len(numbers) > 1 and numbers[0] != numbers[1]:
+                raise ValueError(f"{label} has conflicting values for {key}")
+            value = numbers[0]
+            if key == "quality_pct":
+                if not 0 <= value <= 100:
+                    raise ValueError(f"{label} {key} must be between 0 and 100")
+            elif key == "peak_vram_gb":
+                if value < 0:
+                    raise ValueError(f"{label} {key} must be nonnegative")
+            elif value <= 0:
+                raise ValueError(f"{label} {key} must be positive")
+            values[key] = value
+        return values
 
     @staticmethod
     def evaluate(
@@ -43,43 +85,42 @@ class DeploymentGate:
         candidate: Dict[str, Any],
         max_ttft_increase_pct: float = 10.0,
         max_tpot_increase_pct: float = 10.0,
+        max_throughput_drop_pct: float = 10.0,
+        max_vram_increase_gb: float = 0.0,
         max_quality_drop_pct: float = 2.0,
     ) -> GateResult:
-        base_ttft = float(baseline.get("ttft_p95_ms", 500.0))
-        cand_ttft = float(candidate.get("ttft_p95_ms", 450.0))
-        ttft_delta = ((cand_ttft - base_ttft) / base_ttft) * 100.0
+        thresholds = (
+            max_ttft_increase_pct, max_tpot_increase_pct,
+            max_throughput_drop_pct, max_vram_increase_gb, max_quality_drop_pct,
+        )
+        if any(isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value) or value < 0 for value in thresholds):
+            raise ValueError("Gate thresholds must be finite and nonnegative")
+        base = DeploymentGate._read_metrics(baseline, "baseline")
+        cand = DeploymentGate._read_metrics(candidate, "candidate")
 
-        base_tpot = float(baseline.get("tpot_p95_ms", 30.0))
-        cand_tpot = float(candidate.get("tpot_p95_ms", 28.0))
-        tpot_delta = ((cand_tpot - base_tpot) / base_tpot) * 100.0
-
-        base_thru = float(baseline.get("throughput_tokens_s", 100.0))
-        cand_thru = float(candidate.get("throughput_tokens_s", 120.0))
-        thru_delta = ((cand_thru - base_thru) / base_thru) * 100.0
-
-        base_vram = float(baseline.get("peak_vram_gb", 5.0))
-        cand_vram = float(candidate.get("peak_vram_gb", 4.5))
-        vram_delta = cand_vram - base_vram
-
-        base_qual = float(baseline.get("quality_pct", 100.0))
-        cand_qual = float(candidate.get("quality_pct", 98.7))
-        qual_delta = cand_qual - base_qual
+        ttft_delta = ((cand["ttft_p95_ms"] - base["ttft_p95_ms"]) / base["ttft_p95_ms"]) * 100.0
+        tpot_delta = ((cand["tpot_p95_ms"] - base["tpot_p95_ms"]) / base["tpot_p95_ms"]) * 100.0
+        thru_delta = ((cand["throughput_tokens_per_s"] - base["throughput_tokens_per_s"]) / base["throughput_tokens_per_s"]) * 100.0
+        vram_delta = cand["peak_vram_gb"] - base["peak_vram_gb"]
+        qual_delta = cand["quality_pct"] - base["quality_pct"]
 
         details: List[str] = []
-        passed = True
-
         if ttft_delta > max_ttft_increase_pct:
-            passed = False
             details.append(f"P95 TTFT increased by {ttft_delta:.1f}% (max allowed: {max_ttft_increase_pct}%)")
 
         if tpot_delta > max_tpot_increase_pct:
-            passed = False
             details.append(f"P95 TPOT increased by {tpot_delta:.1f}% (max allowed: {max_tpot_increase_pct}%)")
 
-        if qual_delta < -max_quality_drop_pct:
-            passed = False
-            details.append(f"Quality dropped by {abs(qual_delta):.1f}% (max allowed drop: {max_quality_drop_pct}%)")
+        if thru_delta < -max_throughput_drop_pct:
+            details.append(f"Throughput dropped by {abs(thru_delta):.1f}% (max allowed: {max_throughput_drop_pct}%)")
 
+        if vram_delta > max_vram_increase_gb:
+            details.append(f"Peak VRAM increased by {vram_delta:.2f} GB (max allowed: {max_vram_increase_gb} GB)")
+
+        if qual_delta < -max_quality_drop_pct:
+            details.append(f"Quality dropped by {abs(qual_delta):.1f} pp (max allowed: {max_quality_drop_pct} pp)")
+
+        passed = not details
         if not details:
             details.append("All performance, memory, and quality regression criteria met.")
 

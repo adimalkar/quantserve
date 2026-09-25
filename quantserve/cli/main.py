@@ -43,9 +43,11 @@ def main():
     gate_parser = subparsers.add_parser("gate", help="Validate candidate deployment config against production baseline")
     gate_parser.add_argument("--baseline", type=str, required=True, help="Path to baseline YAML")
     gate_parser.add_argument("--candidate", type=str, required=True, help="Path to candidate YAML")
-    gate_parser.add_argument("--max-ttft-increase", type=float, default=10.0, help="Max allowed TTFT increase %%")
-    gate_parser.add_argument("--max-tpot-increase", type=float, default=10.0, help="Max allowed TPOT increase %%")
-    gate_parser.add_argument("--max-quality-drop", type=float, default=2.0, help="Max allowed quality drop %%")
+    gate_parser.add_argument("--max-ttft-increase", type=float, default=10.0, help="Max allowed TTFT increase percent")
+    gate_parser.add_argument("--max-tpot-increase", type=float, default=10.0, help="Max allowed TPOT increase percent")
+    gate_parser.add_argument("--max-throughput-drop", type=float, default=10.0, help="Max allowed throughput drop percent")
+    gate_parser.add_argument("--max-vram-increase-gb", type=float, default=0.0, help="Max allowed peak VRAM increase in GB")
+    gate_parser.add_argument("--max-quality-drop", type=float, default=2.0, help="Max allowed quality drop in percentage points")
 
     # 5. Export deployment files
     exp_parser = subparsers.add_parser("export", help="Export deployment artifacts (vllm, docker, k8s)")

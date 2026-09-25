@@ -1,5 +1,7 @@
 PYTHON ?= python3
 PYTEST ?= $(PYTHON) -m pytest
+MODEL ?= Qwen/Qwen2.5-0.5B-Instruct
+SERVER_URL ?= http://127.0.0.1:8000
 
 .PHONY: help install test bench profile eval pareto micro-kernel download-models demos clean
 
@@ -7,7 +9,7 @@ help:
 	@echo "QuantServe Command Suite:"
 	@echo "  make test             Run unit and integration tests"
 	@echo "  make demos            Run all 3 primary deployment optimization demos"
-	@echo "  make bench            Execute open-loop load benchmark across precisions"
+	@echo "  make bench            Benchmark a running vLLM server (set MODEL and SERVER_URL)"
 	@echo "  make profile          Run PyTorch Kineto kernel breakdown and roofline analysis"
 	@echo "  make eval             Execute multi-task quality evaluation with bootstrap CIs"
 	@echo "  make micro-kernel     Run Triton fused dequant-GEMV micro-benchmarks"
@@ -22,7 +24,7 @@ test:
 	PYTHONPATH=. $(PYTEST) -v tests/
 
 bench:
-	PYTHONPATH=. $(PYTHON) -m src.bench.runner --config configs/workload_fast.yaml
+	PYTHONPATH=. $(PYTHON) -m src.bench.runner --config configs/workload_fast.yaml --model $(MODEL) --server-url $(SERVER_URL)
 
 profile:
 	PYTHONPATH=. $(PYTHON) -m src.analysis.roofline --device ada_4050

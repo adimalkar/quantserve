@@ -54,9 +54,14 @@ def main():
     exp_parser.add_argument("--output", type=str, default=None, help="Output destination filepath")
 
     # 6. Benchmark
-    bench_parser = subparsers.add_parser("benchmark", help="Run active benchmark sweep on model")
+    bench_parser = subparsers.add_parser("benchmark", help="Benchmark a running vLLM server or explicitly simulate a sweep")
     bench_parser.add_argument("--config", type=str, default="configs/workload_fast.yaml")
     bench_parser.add_argument("--model", type=str, default="Qwen/Qwen2.5-0.5B-Instruct")
+    bench_parser.add_argument("--backend", choices=["vllm", "mock"], default="vllm")
+    bench_parser.add_argument("--server-url", default="http://127.0.0.1:8000")
+    bench_parser.add_argument("--precisions", nargs="+", default=None, help="Simulation only")
+    bench_parser.add_argument("--hardware", default="ada_4050", help="Cost preset only; never a measured GPU identity")
+    bench_parser.add_argument("--output-dir", default="outputs")
 
     args = parser.parse_args()
 
@@ -77,7 +82,10 @@ def main():
     elif args.command == "benchmark":
         from src.bench.runner import run_benchmark_sweep
         import asyncio
-        asyncio.run(run_benchmark_sweep(args.config, args.model, use_mock=True))
+        asyncio.run(run_benchmark_sweep(
+            args.config, args.model, precisions=args.precisions, backend=args.backend,
+            server_url=args.server_url, hardware_key=args.hardware, output_dir=args.output_dir,
+        ))
 
 
 if __name__ == "__main__":

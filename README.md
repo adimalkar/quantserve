@@ -1,5 +1,47 @@
 # QuantServe: Hardware-Aware LLM Deployment Optimizer
 
+## Current implementation status
+
+QuantServe is an open source prototype. Code exists for the hardware probe,
+workload analysis, optimizer, deployment export, gate, and drift detector.
+Unit tests cover several of these paths; the gate still needs dedicated tests.
+The optimizer still pretrains its surrogate on synthetic physics data, and its
+reported benchmark count does not represent measurements. Its recommendations,
+quality estimates, and example numbers below are **illustrative**, not validated
+GPU deployment results. The Phase 0 serving benchmark now has an explicit vLLM
+HTTP path, but a real GPU run and server configuration capture are still pending.
+
+The benchmark defaults to a running vLLM server. It verifies the served model,
+streams completions, uses server reported token counts, and writes provenance and
+failure status into JSON. The request length distribution is synthetic; the GPU
+cost profile is a preset estimate. The reported TPOT is a mean calculated from
+stream chunk timing and completion token count, so it is not a per-token trace.
+The [vLLM OpenAI-compatible server](https://docs.vllm.ai/en/latest/serving/online_serving/)
+supplies the `/v1/models` and `/v1/completions` endpoints used here.
+
+```bash
+# In another terminal, start a vLLM server with the model and precision to test.
+vllm serve Qwen/Qwen2.5-0.5B-Instruct --host 127.0.0.1 --port 8000
+quantserve benchmark --model Qwen/Qwen2.5-0.5B-Instruct --server-url http://127.0.0.1:8000
+
+# Simulation requires an explicit choice and is labeled in the output.
+quantserve benchmark --backend mock --model llama3_1b
+```
+
+Set `QUANTSERVE_VLLM_API_KEY` if the server requires a bearer key. Run each
+server precision as a separate benchmark; the JSON calls its precision
+`server_configured` because the API does not verify the loaded weight format.
+The benchmark exits with an error on missing token usage or failed requests.
+
+| Roadmap area | Verified status |
+| --- | --- |
+| Phase 0: foundation | CLI, probe, metrics, and vLLM HTTP client exist; no live serving run recorded yet. |
+| Phase 1: benchmark matrix | Precision sweep exists only in simulation; no measured matrix or Parquet dataset. |
+| Phases 2–3: prediction and search | Surrogate and candidate scorer exist; training and recommendations currently rely on synthetic estimates, with no real search comparison. |
+| Phases 4–5: quality and traces | Synthetic quality evaluation and trace parsing/fingerprinting exist; real quality runs and trace replay remain. |
+| Phases 6–9: explanation and operations | Analytical explanation, export, gate, and drift code exist; deployment and gate behavior need real validation. |
+| Phase 10: Triton | Diagnostic kernel work exists; no serving bottleneck has been measured and optimized. |
+
 > **An intelligent deployment optimization system for LLM inference that answers:**
 > *"Given my model, hardware, workload trace, latency SLO, quality floor, and budget: what configuration should I actually deploy—and why?"*
 
@@ -15,7 +57,7 @@ $$\text{Optimal Config} = f(\text{Model}, \text{GPU Hardware}, \text{Workload Tr
 - **Workload Shifts Invert Tradeoffs**: Interactive assistants require minimal TTFT/TPOT with uncompressed KV caches; RAG workloads with long retrieved contexts (2K–6K tokens) exhaust VRAM without INT8/FP8 KV caches and chunked prefill.
 - **Exhaustive Benchmarking is Prohibitive**: Evaluating 480+ combinations of weight precision, KV cache dtype, batch sizes, and sequence limits across real GPUs wastes hours of compute.
 
-**QuantServe automates this entire decision loop.** It profiles the hardware, fingerprints production request traces, searches a 480-candidate deployment space using an uncertainty-aware Random Forest surrogate performance model, mechanistically explains the winning configuration via Roofline analysis, and exports ready-to-run vLLM, Docker Compose, or Kubernetes deployment manifests.
+**The intended QuantServe decision loop** profiles hardware, fingerprints request traces, searches a deployment space with a surrogate performance model, explains recommendations with Roofline analysis, and exports vLLM, Docker Compose, or Kubernetes deployment manifests. Several steps currently use synthetic or estimated inputs; see the implementation status above.
 
 ---
 

@@ -15,6 +15,7 @@ class RequestRecord:
     token_timestamps: List[float] = field(default_factory=list)
     completed_time: float = 0.0
     error: Optional[str] = None
+    tpot_override_ms: Optional[float] = None
 
     @property
     def ttft_ms(self) -> float:
@@ -26,6 +27,8 @@ class RequestRecord:
     @property
     def tpot_ms(self) -> float:
         """Time Per Output Token (mean inter-token latency during decode phase) in milliseconds."""
+        if self.tpot_override_ms is not None:
+            return self.tpot_override_ms
         if len(self.token_timestamps) > 1:
             intervals = np.diff(self.token_timestamps)
             return float(np.mean(intervals) * 1000.0)
@@ -80,7 +83,10 @@ class BenchmarkResult:
             "concurrency_or_rate": self.concurrency_or_rate,
             "total_requests": self.total_requests,
             "completed_requests": self.completed_requests,
+            "failed_requests": self.failed_requests,
             "duration_s": round(self.duration_s, 2),
+            "total_prompt_tokens": self.total_prompt_tokens,
+            "total_output_tokens": self.total_output_tokens,
             "throughput_tokens_per_s": round(self.throughput_tokens_per_s, 2),
             "output_throughput_tokens_per_s": round(self.output_throughput_tokens_per_s, 2),
             "ttft_p50_ms": round(self.ttft_p50_ms, 2),
@@ -168,7 +174,7 @@ class MetricsCollector:
         ]
         slo_compliant_count = len(slo_compliant_records)
         slo_goodput = slo_compliant_count / duration_s
-        compliance_pct = (slo_compliant_count / len(valid_records)) * 100.0
+        compliance_pct = (slo_compliant_count / len(self.records)) * 100.0
 
         # Cost model calculation:
         # $/1M tokens = GPU hourly rate / (valid_tokens_per_second * 3600) * 1,000,000
@@ -178,8 +184,6 @@ class MetricsCollector:
             valid_tokens_per_s = valid_output_tokens / duration_s
             if valid_tokens_per_s > 0:
                 cost_per_1m_tokens = (hourly_rate_usd / (valid_tokens_per_s * 3600.0)) * 1_000_000.0
-            else:
-                cost_per_1m_tokens = float("inf")
 
         return BenchmarkResult(
             model_name=model_name,

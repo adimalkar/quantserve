@@ -24,6 +24,7 @@ dependencies = [
     "pandas>=2.0.0",
     "matplotlib>=3.7.0",
     "pyyaml>=6.0",
+    "aiohttp>=3.9.0",
 ]
 
 [project.scripts]

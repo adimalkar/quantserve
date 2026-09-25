@@ -4,12 +4,14 @@
 
 QuantServe is an open source prototype. Code exists for the hardware probe,
 workload analysis, optimizer, deployment export, gate, and drift detector.
-Unit tests cover several of these paths; the gate still needs dedicated tests.
+Unit tests cover several of these paths.
 The optimizer still pretrains its surrogate on synthetic physics data, and its
 reported benchmark count does not represent measurements. Its recommendations,
 quality estimates, and example numbers below are **illustrative**, not validated
-GPU deployment results. The Phase 0 serving benchmark now has an explicit vLLM
-HTTP path, but a real GPU run and server configuration capture are still pending.
+GPU deployment results. The Phase 0 serving benchmark has an explicit vLLM
+HTTP path and a [small local GPU baseline](benchmarks/baselines/2026-09-25-rtx4050-qwen2.5-0.5b/README.md).
+That artifact records the server settings and raw results for two KV cache
+configurations; a broad serving matrix and quality measurements remain.
 
 The benchmark defaults to a running vLLM server. It verifies the served model,
 streams completions, uses server reported token counts, and writes provenance and
@@ -35,8 +37,8 @@ The benchmark exits with an error on missing token usage or failed requests.
 
 | Roadmap area | Verified status |
 | --- | --- |
-| Phase 0: foundation | CLI, probe, metrics, and vLLM HTTP client exist; no live serving run recorded yet. |
-| Phase 1: benchmark matrix | Precision sweep exists only in simulation; no measured matrix or Parquet dataset. |
+| Phase 0: foundation | CLI, probe, metrics, vLLM HTTP client, and one local GPU baseline exist. |
+| Phase 1: benchmark matrix | Two KV cache settings have short measured sweeps; no broad precision/concurrency matrix or Parquet dataset. |
 | Phases 2–3: prediction and search | Surrogate and candidate scorer exist; training and recommendations currently rely on synthetic estimates, with no real search comparison. |
 | Phases 4–5: quality and traces | Synthetic quality evaluation and trace parsing/fingerprinting exist; real quality runs and trace replay remain. |
 | Phases 6–9: explanation and operations | Analytical explanation, export, gate, and drift code exist; deployment and gate behavior need real validation. |

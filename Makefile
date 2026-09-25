@@ -5,7 +5,7 @@ PYTEST ?= $(PYTHON) -m pytest
 
 help:
 	@echo "QuantServe Command Suite:"
-	@echo "  make test             Run all 27 unit and regression tests"
+	@echo "  make test             Run unit and integration tests"
 	@echo "  make demos            Run all 3 primary deployment optimization demos"
 	@echo "  make bench            Execute open-loop load benchmark across precisions"
 	@echo "  make profile          Run PyTorch Kineto kernel breakdown and roofline analysis"

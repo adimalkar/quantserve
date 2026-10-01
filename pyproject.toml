@@ -1,12 +1,17 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["quantserve*", "src*"]
 
 [project]
 name = "quantserve"
 version = "0.2.0"
 description = "QuantServe: Hardware-Aware LLM Deployment Optimizer"
 readme = "README.md"
+license = "MIT"
 authors = [{ name = "QuantServe Systems Team" }]
 requires-python = ">=3.10"
 dependencies = [

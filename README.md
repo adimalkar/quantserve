@@ -315,25 +315,27 @@ ML Project/
 │   ├── coding_assistant/                  # Demo 1: Interactive Coding Assistant
 │   ├── rag_assistant/                     # Demo 2: RAG Knowledge Assistant
 │   └── batch_processing/                  # Demo 3: Batch Document Processing
-└── tests/                                 # 27 comprehensive automated tests (100% pass)
+└── tests/                                 # Automated unit and integration tests
 ```
 
 ---
 
 ## Quickstart & Replication
 
-### 1. Storage & Environment Setup (1TB Drive)
-All dependencies, virtual environments, pip cache, and model weights are routed to the 1TB Drive (`/mnt/1TB_Drive/Data/MyFiles`):
+### 1. Install
 
 ```bash
-# Source environment variables
-source env.sh
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[dev]'
 ```
+
+The optional `env.sh` sets cache locations. Set `QUANTSERVE_CACHE_DIR` before
+sourcing it to use a custom storage location.
 
 ### 2. Run Test Suite
 ```bash
-make test
-# Runs all 27 unit tests across CLI, optimizer, surrogate, hardware probe, and kernels
+make test PYTHON=python
 ```
 
 ### 3. Run the Three Demonstration Scenarios
@@ -348,12 +350,14 @@ make micro-kernel
 
 ---
 
-## Summary of Completed Improvements
+## Open source and contributing
 
-In accordance with [QuantServe_Improved_Project_Plan.md](file:///mnt/1TB_Drive/Data/MyFiles/Projects/ML%20Project/QuantServe_Improved_Project_Plan.md), this codebase delivers:
-1. **Product Reframing**: Transformed from an academic benchmarking harness into a production-grade Deployment Optimizer answering *"what should I deploy—and why?"*.
-2. **Surrogate Performance Model**: Random Forest multi-target predictors estimating TTFT, TPOT, Throughput, and Peak VRAM with **90% uncertainty intervals**.
-3. **Hardware-Aware & Trace-Driven**: Automatically adapts to GPU capabilities (Ada Lovelace RTX 4050) and production traffic traces (`.jsonl`).
-4. **Actionable Outputs**: Automatically generates ready-to-run `vllm serve` commands, Docker Compose files, and Kubernetes manifests.
-5. **Quality & Drift Protection**: Evaluates quality retention floors and alerts on workload distribution drift via Jensen-Shannon Divergence.
-6. **Mechanistic Explanation**: Connects high-level recommendations back to low-level hardware constraints via Roofline operational intensity and custom Triton fused kernels.
+QuantServe is an open source project under the [MIT License](LICENSE).
+Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) for setup,
+testing, and evidence requirements. Pull requests run CPU tests on Python 3.10
+and 3.12 and verify that the source and wheel distributions build.
+
+The [project plan](QuantServe_Improved_Project_Plan.md) describes the intended
+deployment optimizer. Current surrogate predictions, quality scores, and demo
+results use synthetic or estimated inputs. Treat them as prototype outputs
+until serving, quality, and constraint measurements validate them.

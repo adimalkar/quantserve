@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# Source this file before running experiments to route all cache, downloads, and models to the 1TB drive
-export HF_HOME="/mnt/1TB_Drive/Data/MyFiles/models/huggingface"
-export TRANSFORMERS_CACHE="/mnt/1TB_Drive/Data/MyFiles/models/huggingface"
-export TORCH_HOME="/mnt/1TB_Drive/Data/MyFiles/models/torch"
-export PIP_CACHE_DIR="/mnt/1TB_Drive/Data/MyFiles/.cache/pip"
-export PATH="/mnt/1TB_Drive/Data/MyFiles/env_quantserve/bin:$PATH"
-
-echo "QuantServe-Bench Environment Activated (Storage -> /mnt/1TB_Drive/Data/MyFiles)"
-echo "Python: $(which python)"
+# Optional cache locations for local experiments. Source after activating a venv.
+quantserve_cache_root="${QUANTSERVE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/quantserve}"
+export HF_HOME="${HF_HOME:-$quantserve_cache_root/huggingface}"
+export TORCH_HOME="${TORCH_HOME:-$quantserve_cache_root/torch}"
+export PIP_CACHE_DIR="${PIP_CACHE_DIR:-$quantserve_cache_root/pip}"
+unset quantserve_cache_root

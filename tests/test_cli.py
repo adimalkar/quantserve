@@ -25,8 +25,8 @@ def test_cli_analyze():
     assert "Workload Fingerprint Summary" in res.stdout
 
 
-def test_cli_recommend():
-    os.makedirs("outputs", exist_ok=True)
+def test_cli_recommend(tmp_path):
+    output_path = tmp_path / "recommendation.yaml"
     res = run_cli_command([
         "recommend",
         "--model", "Qwen/Qwen2.5-0.5B-Instruct",
@@ -34,20 +34,28 @@ def test_cli_recommend():
         "--trace", "examples/coding_assistant/trace.jsonl",
         "--p95-ttft", "650ms",
         "--p95-tpot", "40ms",
-        "--export", "outputs/test_recommendation.yaml",
+        "--export", str(output_path),
     ])
     assert res.returncode == 0
     assert "RECOMMENDED DEPLOYMENT CONFIGURATION" in res.stdout
     assert "vllm serve" in res.stdout
+    assert output_path.exists()
 
 
-def test_cli_export():
-    os.makedirs("outputs", exist_ok=True)
+def test_cli_export(tmp_path):
+    recommendation_path = tmp_path / "recommendation.yaml"
+    recommendation = run_cli_command([
+        "recommend",
+        "--model", "Qwen/Qwen2.5-0.5B-Instruct",
+        "--hardware", "ada_4050",
+        "--export", str(recommendation_path),
+    ])
+    assert recommendation.returncode == 0
     res = run_cli_command([
         "export",
-        "--recommendation", "outputs/test_recommendation.yaml",
+        "--recommendation", str(recommendation_path),
         "--format", "vllm",
-        "--output", "outputs/test_vllm.yaml",
+        "--output", str(tmp_path / "vllm.yaml"),
     ])
     assert res.returncode == 0
     assert "Successfully generated VLLM deployment file" in res.stdout

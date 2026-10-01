@@ -1,22 +1,22 @@
-PYTHON ?= /mnt/1TB_Drive/Data/MyFiles/env_quantserve/bin/python
+PYTHON ?= python3
 PYTEST ?= $(PYTHON) -m pytest
 
 .PHONY: help install test bench profile eval pareto micro-kernel download-models demos clean
 
 help:
-	@echo "QuantServe Command Suite (1TB Drive Environment):"
-	@echo "  make test             Run all 27 unit and regression tests"
+	@echo "QuantServe Command Suite:"
+	@echo "  make test             Run unit and integration tests"
 	@echo "  make demos            Run all 3 primary deployment optimization demos"
 	@echo "  make bench            Execute open-loop load benchmark across precisions"
 	@echo "  make profile          Run PyTorch Kineto kernel breakdown and roofline analysis"
 	@echo "  make eval             Execute multi-task quality evaluation with bootstrap CIs"
 	@echo "  make micro-kernel     Run Triton fused dequant-GEMV micro-benchmarks"
 	@echo "  make pareto           Generate Pareto frontier and crossover plots"
-	@echo "  make download-models  Download project model weights into /mnt/1TB_Drive/Data/MyFiles/models"
+	@echo "  make download-models  Download optional project model weights"
 	@echo "  make clean            Remove build artifacts and temporary run logs"
 
 install:
-	$(PYTHON) -m pip install --cache-dir /mnt/1TB_Drive/Data/MyFiles/.cache/pip -e ".[dev]"
+	$(PYTHON) -m pip install -e ".[dev]"
 
 test:
 	PYTHONPATH=. $(PYTEST) -v tests/

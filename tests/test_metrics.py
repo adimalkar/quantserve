@@ -73,6 +73,9 @@ def test_metrics_collector_aggregation():
     assert summary.slo_goodput_requests_per_s == 2.0  # 2 requests met SLO in 1 second
     assert pytest.approx(summary.slo_compliance_rate_pct, abs=0.1) == 66.67
     assert summary.effective_cost_per_1m_valid_tokens_usd is not None
+    payload = summary.to_dict()
+    assert payload["ttft_p95_ms"] == round(summary.ttft_p95_ms, 2)
+    assert payload["tpot_p95_ms"] == round(summary.tpot_p95_ms, 2)
     # 2 compliant requests * 10 output tokens = 20 valid tokens / sec = 72,000 valid tokens/hour
     # Hourly rate = $0.36 -> Cost/1M = ($0.36 / 72,000) * 1,000,000 = $5.00 / 1M tokens
     assert pytest.approx(summary.effective_cost_per_1m_valid_tokens_usd, abs=0.05) == 5.00

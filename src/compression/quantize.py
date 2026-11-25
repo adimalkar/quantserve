@@ -29,10 +29,12 @@ class QuantizedLinear(nn.Module):
             self.register_parameter("bias", None)
 
         if self.precision in ("int4", "int4_awq", "w4a16"):
-            # 4-bit weights packed into int32 (8 weights per int32) or uint8 (2 weights per byte)
+            if group_size <= 0:
+                raise ValueError(f"group_size must be positive, got {group_size}")
+            # 4-bit weights packed into uint8 (2 weights per byte)
             self.register_buffer(
                 "qweight",
-                torch.zeros((out_features, in_features // 2), dtype=torch.uint8),
+                torch.zeros((out_features, math.ceil(in_features / 2)), dtype=torch.uint8),
             )
             self.register_buffer(
                 "scales",
@@ -62,14 +64,26 @@ class QuantizedLinear(nn.Module):
     @torch.no_grad()
     def pack_from_float(self, float_weight: torch.Tensor):
         """Packs a floating-point weight matrix into the designated quantized representation."""
+        if float_weight.shape != (self.out_features, self.in_features):
+            raise ValueError(
+                f"Expected weight shape ({self.out_features}, {self.in_features}), got {tuple(float_weight.shape)}"
+            )
         float_weight = float_weight.to(torch.float16)
 
         if self.precision in ("int4", "int4_awq", "w4a16"):
             # Group-wise asymmetric 4-bit quantization
             out_feat, in_feat = float_weight.shape
             num_groups = math.ceil(in_feat / self.group_size)
+            pad_len = num_groups * self.group_size - in_feat
 
-            w_reshaped = float_weight.view(out_feat, num_groups, self.group_size)
+            # Compute group stats in float32 and pad tail groups with an existing element
+            # so trailing padding does not distort min/max range when in_features % group_size != 0.
+            w_f32 = float_weight.to(torch.float32)
+            if pad_len > 0:
+                pad_fill = w_f32[:, -1:].expand(out_feat, pad_len)
+                w_f32 = torch.cat([w_f32, pad_fill], dim=1)
+
+            w_reshaped = w_f32.view(out_feat, num_groups, self.group_size)
             w_min = w_reshaped.amin(dim=-1, keepdim=True)
             w_max = w_reshaped.amax(dim=-1, keepdim=True)
 
@@ -78,7 +92,10 @@ class QuantizedLinear(nn.Module):
             zero = torch.round(-w_min / scale)
 
             q = torch.clamp(torch.round(w_reshaped / scale) + zero, 0, 15).to(torch.uint8)
-            q = q.view(out_feat, in_feat)
+            q = q.view(out_feat, num_groups * self.group_size)[:, :in_feat]
+
+            if in_feat % 2 != 0:
+                q = F.pad(q, (0, 1))
 
             # Pack two 4-bit elements per uint8 byte
             q_low = q[:, 0::2]
@@ -86,8 +103,8 @@ class QuantizedLinear(nn.Module):
             packed = q_low | (q_high << 4)
 
             self.qweight.copy_(packed)
-            self.scales.copy_(scale.squeeze(-1))
-            self.zeros.copy_(zero.squeeze(-1))
+            self.scales.copy_(scale.squeeze(-1).to(torch.float16))
+            self.zeros.copy_(zero.squeeze(-1).to(torch.float16))
 
         elif self.precision in ("int8", "w8a8", "int8_smoothquant"):
             # Symmetric per-channel int8 quantization
@@ -114,6 +131,8 @@ class QuantizedLinear(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Executes forward pass with on-the-fly dequantization or native tensor cores."""
+        bias = self.bias.to(x.dtype) if self.bias is not None else None
+
         if self.precision in ("int4", "int4_awq", "w4a16"):
             # Unpack 4-bit weights
             q_low = self.qweight & 0x0F
@@ -123,26 +142,32 @@ class QuantizedLinear(nn.Module):
             unpacked = torch.empty((out_feat, half_in * 2), dtype=torch.float16, device=x.device)
             unpacked[:, 0::2] = q_low.to(torch.float16)
             unpacked[:, 1::2] = q_high.to(torch.float16)
+            unpacked = unpacked[:, :self.in_features]
 
             num_groups = self.scales.shape[1]
+            pad_len = num_groups * self.group_size - self.in_features
+            if pad_len > 0:
+                unpacked = F.pad(unpacked, (0, pad_len))
+
             unpacked_reshaped = unpacked.view(out_feat, num_groups, self.group_size)
             scale = self.scales.unsqueeze(-1)
             zero = self.zeros.unsqueeze(-1)
 
-            dequant_w = ((unpacked_reshaped - zero) * scale).view(out_feat, -1)
-            return F.linear(x, dequant_w, self.bias)
+            dequant_w = ((unpacked_reshaped - zero) * scale).view(out_feat, -1)[:, :self.in_features].to(x.dtype)
+            return F.linear(x, dequant_w, bias)
 
         elif self.precision in ("int8", "w8a8", "int8_smoothquant"):
-            # Dequantize symmetric INT8 weights to FP16
+            # Apply SmoothQuant inverse activation scales, then dequantize symmetric INT8 weights
+            x_scaled = x * self.act_scales.to(x.dtype)
             dequant_w = self.qweight.to(x.dtype) * self.scales.to(x.dtype)
-            return F.linear(x, dequant_w, self.bias)
+            return F.linear(x_scaled, dequant_w, bias)
 
         elif self.precision in ("fp8", "fp8_e4m3"):
             dequant_w = self.qweight.to(x.dtype) * self.scale.to(x.dtype)
-            return F.linear(x, dequant_w, self.bias)
+            return F.linear(x, dequant_w, bias)
 
         else:
-            return F.linear(x, self.weight, self.bias)
+            return F.linear(x, self.weight.to(x.dtype), bias)
 
 
 class AWQQuantizer:
@@ -205,8 +230,9 @@ class SmoothQuantizer:
         )
         w = layer.weight.data.clone()
         if scale is not None:
-            w = w * scale.view(1, -1)
-            ql.act_scales.copy_((1.0 / scale).view(1, -1).to(torch.float16))
+            scale_vec = scale.view(1, -1).to(device=w.device, dtype=torch.float32)
+            w = (w.to(torch.float32) * scale_vec).to(layer.weight.dtype)
+            ql.act_scales.copy_((1.0 / scale_vec).to(device=ql.act_scales.device, dtype=torch.float16))
 
         ql.pack_from_float(w)
         if layer.bias is not None:

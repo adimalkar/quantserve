@@ -41,6 +41,20 @@ class PerformancePredictor:
         results = self.predict_batch_with_uncertainty([config], hardware, workload, model_meta)
         return results[0]
 
+    @staticmethod
+    def _build_interval(preds: np.ndarray) -> Interval:
+        """Builds a 90% prediction interval with at least a +-30% band around the mean."""
+        point = float(np.mean(preds))
+        low = float(np.percentile(preds, 5))
+        high = float(np.percentile(preds, 95))
+        margin = abs(point) * 0.3
+        # Preserve empirical lower tail when wider than the minimum band, and keep lower_90 <= point.
+        low = min(low, point - margin)
+        if point >= 0.0:
+            low = max(0.0, low)
+        high = max(high, point + margin)
+        return Interval(point=point, lower_90=low, upper_90=high)
+
     def predict_batch_with_uncertainty(
         self,
         configs: List[Dict[str, Any]],
@@ -81,17 +95,9 @@ class PerformancePredictor:
             p_preds = tpot_tree_preds[:, i]
             th_preds = thru_tree_preds[:, i]
 
-            def _get_interval(preds: np.ndarray) -> Interval:
-                point = float(np.mean(preds))
-                low = float(np.percentile(preds, 5))
-                high = float(np.percentile(preds, 95))
-                low = max(low, point * 0.7)
-                high = max(high, point * 1.3)
-                return Interval(point=point, lower_90=low, upper_90=high)
-
-            ttft_inv = _get_interval(t_preds)
-            tpot_inv = _get_interval(p_preds)
-            thru_inv = _get_interval(th_preds)
+            ttft_inv = self._build_interval(t_preds)
+            tpot_inv = self._build_interval(p_preds)
+            thru_inv = self._build_interval(th_preds)
 
             prob_ttft = float(np.mean(t_preds <= slo_ttft))
             prob_tpot = float(np.mean(p_preds <= slo_tpot))
